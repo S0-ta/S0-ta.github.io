@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1417">
+<title>耳もと通訳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+/* Layout: one-screen tool — language pair on top, live caption band, newest-first transcript, big mic button docked at bottom */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --ink:#14201d; --muted:#5d6b67; --line:#d5dcd9;
+  --accent:#0b7a63; --accent-ink:#ffffff; --live:#c2410c; --warn:#b45309;
+  --f-ui:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --cap:1.35rem;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1417; --surface:#182026; --ink:#e9efed; --muted:#93a29e; --line:#2a353b;
+  --accent:#34c39f; --accent-ink:#06231c; --live:#fb923c; --warn:#fbbf24; color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.55;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;max-width:720px;margin-inline:auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 10px}
+h1{font-size:1.15rem;margin:0;letter-spacing:.02em}
+.pill{font-size:.78rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill[data-s="listen"]{color:var(--accent);border-color:var(--accent)}
+.pill[data-s="listen"]::before{background:var(--accent);animation:blink 1.2s infinite}
+.pill[data-s="speak"]{color:var(--live);border-color:var(--live)}
+.pill[data-s="speak"]::before{background:var(--live)}
+.pill[data-s="error"]{color:var(--warn);border-color:var(--warn)}
+.pill[data-s="error"]::before{background:var(--warn)}
+@keyframes blink{50%{opacity:.25}}
+.pair{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+.pair label{display:block;font-size:.72rem;color:var(--muted);letter-spacing:.06em;margin-bottom:4px}
+select,button{font:inherit;color:inherit}
+select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
+.swap{height:44px;width:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:1.1rem}
+.live{margin-top:12px;min-height:3.2em;padding:10px 12px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 10px 10px 0;color:var(--muted)}
+.live b{display:block;font-size:.7rem;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.log{flex:1;overflow-y:auto;margin-top:12px;display:flex;flex-direction:column;gap:10px;padding-bottom:12px;min-height:0}
+.item{padding:10px 0;border-bottom:1px solid var(--line)}
+.item .src{color:var(--muted);font-size:.85rem}
+.item .dst{font-size:var(--cap);font-weight:700;line-height:1.45;margin-top:2px;overflow-wrap:anywhere}
+.item time{font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.item.pending .dst{color:var(--muted);font-weight:400}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+.empty ol{padding-left:1.2em;margin:6px 0}
+details{border-top:1px solid var(--line);padding-block:8px}
+summary{cursor:pointer;color:var(--muted);font-size:.85rem}
+.set{display:grid;gap:10px;margin-top:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.9rem}
+.row input[type=range]{width:50%}
+.row select{width:auto}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.dock{padding-block:10px calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:10px}
+.mic{flex:1;height:60px;border:0;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-size:1.05rem;font-weight:700;cursor:pointer}
+.mic.on{background:var(--live);color:#fff}
+.ghost{height:60px;padding:0 16px;border-radius:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.note{font-size:.78rem;color:var(--warn);margin-top:6px}
+.banner{margin-top:10px;padding:10px 12px;border:1px solid var(--warn);border-radius:10px;font-size:.85rem}
+.banner a{display:inline-block;margin-top:4px;color:var(--accent);font-weight:700;overflow-wrap:anywhere}
+.perm{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-size:.85rem;color:var(--muted)}
+.perm b[data-s="granted"]{color:var(--accent)}
+.perm b[data-s="denied"]{color:var(--warn)}
+.mini{padding:6px 12px;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:.8rem}
+.howto{margin-top:6px;font-size:.8rem;color:var(--muted);border-left:3px solid var(--warn);padding:6px 10px}
+.howto ol{margin:4px 0;padding-left:1.2em}
+@media (prefers-reduced-motion:reduce){.pill::before{animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>耳もと通訳</h1>
+  <span class="pill" id="status" data-s="idle">待機中</span>
+</header>
+
+<div class="pair">
+  <div><label for="srcLang">相手の言語（聞き取り）</label><select id="srcLang"></select></div>
+  <button class="swap" id="swap" type="button" aria-label="言語を入れ替え">⇄</button>
+  <div><label for="dstLang">訳す言語（読み上げ）</label><select id="dstLang"></select></div>
+</div>
+<div class="note" id="support" hidden></div>
+<div class="banner" id="framed" hidden>
+  この画面の中ではマイクが使えません（埋め込み表示の制限）。通訳は次のURLを Safari / Chrome で開いて使ってください。
+  <a href="https://s0-ta.github.io/mimimoto/" target="_blank" rel="noopener">s0-ta.github.io/mimimoto/</a>
+</div>
+<div class="perm" id="perm">
+  <span>マイク：<b id="permState">確認中</b></span>
+  <button class="mini" id="permBtn" type="button">マイクを許可</button>
+</div>
+<div class="howto" id="howto" hidden></div>
+
+<div class="live" aria-live="polite"><b>聞き取り中の文</b><span id="interim">—</span></div>
+
+<div class="log" id="log">
+  <div class="empty" id="empty">
+    使い方
+    <ol>
+      <li>イヤホンを接続し、外の音が聞こえるモードにする</li>
+      <li>相手の言語と訳す言語を選ぶ</li>
+      <li>「通訳を開始」を押し、スマホのマイクを相手に向ける</li>
+    </ol>
+    訳文はイヤホンで読み上げられ、ここに字幕として残ります。
+  </div>
+</div>
+
+<details>
+  <summary>設定</summary>
+  <div class="set">
+    <div class="row"><label for="tts">訳文をイヤホンで読み上げる</label><input type="checkbox" id="tts" checked></div>
+    <div class="row"><label for="duck">読み上げ中は聞き取りを止める（誤認識防止）</label><input type="checkbox" id="duck" checked></div>
+    <div class="row"><label for="rate">読み上げ速度 <span id="rateV">1.1</span>×</label><input type="range" id="rate" min="0.7" max="1.6" step="0.1" value="1.1"></div>
+    <div class="row"><label for="size">字幕の大きさ</label><input type="range" id="size" min="1" max="2.2" step="0.1" value="1.35"></div>
+    <div class="row"><label for="engine">翻訳エンジン</label>
+      <select id="engine"><option value="google">Google（高精度）</option><option value="mymemory">MyMemory（予備）</option></select></div>
+    <div class="row"><label for="voice">読み上げ音声</label><select id="voice"><option value="">自動</option></select></div>
+    <div class="row"><span>イヤホンから音が出るか確認</span><button class="mini" id="testTts" type="button">テスト再生</button></div>
+  </div>
+</details>
+
+<div class="dock">
+  <button class="mic" id="mic" type="button">通訳を開始</button>
+  <button class="ghost" id="clear" type="button">消去</button>
+</div>
+
+<script>
+(() => {
+  const LANGS = [
+    ["en-US","English（米）","en"],["en-GB","English（英）","en"],["ja-JP","日本語","ja"],
+    ["zh-CN","中文（简体）","zh-CN"],["zh-TW","中文（繁體）","zh-TW"],["ko-KR","한국어","ko"],
+    ["es-ES","Español","es"],["fr-FR","Français","fr"],["de-DE","Deutsch","de"],["it-IT","Italiano","it"],
+    ["pt-BR","Português","pt"],["ru-RU","Русский","ru"],["th-TH","ไทย","th"],["vi-VN","Tiếng Việt","vi"],
+    ["id-ID","Bahasa Indonesia","id"],["hi-IN","हिन्दी","hi"],["ar-SA","العربية","ar"]
+  ];
+  const $ = id => document.getElementById(id);
+  const el = { src:$("srcLang"), dst:$("dstLang"), swap:$("swap"), mic:$("mic"), clear:$("clear"),
+    status:$("status"), interim:$("interim"), log:$("log"), empty:$("empty"), support:$("support"),
+    tts:$("tts"), duck:$("duck"), rate:$("rate"), rateV:$("rateV"), size:$("size"), engine:$("engine"), voice:$("voice") };
+
+  for (const [code,name] of LANGS) { el.src.add(new Option(name,code)); el.dst.add(new Option(name,code)); }
+
+  // ---- 設定の保存（失敗しても動く）
+  const store = {
+    get(){ try { return JSON.parse(localStorage.getItem("mimimoto") || "{}"); } catch { return {}; } },
+    set(v){ try { localStorage.setItem("mimimoto", JSON.stringify(v)); } catch {} }
+  };
+  const saved = store.get();
+  el.src.value = saved.src || "en-US"; el.dst.value = saved.dst || "ja-JP";
+  if (saved.rate) el.rate.value = saved.rate;
+  if (saved.size) el.size.value = saved.size;
+  if (saved.engine) el.engine.value = saved.engine;
+  if (saved.tts === false) el.tts.checked = false;
+  if (saved.duck === false) el.duck.checked = false;
+  const persist = () => store.set({ src:el.src.value, dst:el.dst.value, rate:el.rate.value, size:el.size.value,
+    engine:el.engine.value, tts:el.tts.checked, duck:el.duck.checked, voice:el.voice.value });
+  const applyUI = () => { el.rateV.textContent = Number(el.rate.value).toFixed(1);
+    document.documentElement.style.setProperty("--cap", el.size.value + "rem"); };
+  applyUI();
+
+  const tCode = c => (LANGS.find(l => l[0] === c) || [,, c.slice(0,2)])[2];
+
+  // ---- 対応チェック
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { el.support.hidden = false;
+    el.support.textContent = "このブラウザは音声認識に対応していません。iPhoneはSafari、AndroidはChromeで開いてください。";
+    el.mic.disabled = true; }
+  if (!window.isSecureContext) { el.support.hidden = false;
+    el.support.textContent = "https で開く必要があります（マイク使用の条件）。"; }
+
+  // ---- 音声合成
+  let voices = [];
+  const loadVoices = () => {
+    voices = speechSynthesis.getVoices();
+    const lang = el.dst.value.toLowerCase(), base = lang.slice(0,2);
+    const list = voices.filter(v => v.lang.toLowerCase().replace("_","-").startsWith(base));
+    el.voice.length = 1;
+    for (const v of list) el.voice.add(new Option(`${v.name}（${v.lang}）`, v.voiceURI));
+    if (saved.voice && list.some(v => v.voiceURI === saved.voice)) el.voice.value = saved.voice;
+  };
+  if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+  const speakQueue = [];
+  let speaking = false;
+  function speak(text) {
+    if (!el.tts.checked || !("speechSynthesis" in window)) return;
+    speakQueue.push(text); if (!speaking) nextSpeak();
+  }
+  function nextSpeak() {
+    const text = speakQueue.shift();
+    if (!text) { speaking = false; if (running) { setStatus("listen"); resumeListening(); } return; }
+    speaking = true; setStatus("speak");
+    if (el.duck.checked) pauseListening();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = el.dst.value; u.rate = Number(el.rate.value);
+    const v = voices.find(v => v.voiceURI === el.voice.value);
+    if (v) u.voice = v;
+    u.onend = u.onerror = () => setTimeout(nextSpeak, 80);
+    speechSynthesis.speak(u);
+  }
+
+  // ---- 翻訳
+  async function translate(text) {
+    const sl = tCode(el.src.value), tl = tCode(el.dst.value);
+    if (sl === tl) return text;
+    const engines = el.engine.value === "mymemory" ? [mymemory, google] : [google, mymemory];
+    let lastErr;
+    for (const fn of engines) { try { const r = await fn(text, sl, tl); if (r) return r; } catch (e) { lastErr = e; } }
+    throw lastErr || new Error("翻訳できませんでした");
+  }
+  async function google(q, sl, tl) {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url); if (!res.ok) throw new Error("Google " + res.status);
+    const j = await res.json(); return (j[0] || []).map(x => x[0]).join("");
+  }
+  async function mymemory(q, sl, tl) {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${encodeURIComponent(sl)}|${encodeURIComponent(tl)}`;
+    const res = await fetch(url); if (!res.ok) throw new Error("MyMemory " + res.status);
+    const j = await res.json(); return j?.responseData?.translatedText || "";
+  }
+
+  // ---- 字幕ログ（翻訳は到着順でなく発話順に処理）
+  let chain = Promise.resolve();
+  function commit(text) {
+    text = text.trim(); if (!text) return;
+    el.empty.hidden = true;
+    const item = document.createElement("div"); item.className = "item pending";
+    const t = new Date();
+    item.innerHTML = `<time></time><div class="src"></div><div class="dst">翻訳中…</div>`;
+    item.querySelector("time").textContent = t.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    item.querySelector(".src").textContent = text;
+    el.log.prepend(item);
+    const job = translate(text).catch(e => "（翻訳失敗：" + e.message + "。通信状況か翻訳エンジン設定を確認してください）");
+    chain = chain.then(() => job).then(out => {
+      item.classList.remove("pending"); item.querySelector(".dst").textContent = out;
+      if (!out.startsWith("（翻訳失敗")) speak(out);
+    });
+  }
+
+  // ---- 音声認識
+  let rec = null, running = false, paused = false, wakeLock = null;
+  let lastFinal = "", committedPrefix = "", silenceTimer = null, interimText = "";
+
+  function setStatus(s, msg) {
+    const label = { idle:"待機中", listen:"聞き取り中", speak:"読み上げ中", error:msg || "エラー" }[s];
+    el.status.dataset.s = s; el.status.textContent = label;
+  }
+
+  function build() {
+    const r = new SR();
+    r.lang = el.src.value; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = ev => {
+      let interim = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const res = ev.results[i], txt = res[0].transcript;
+        if (res.isFinal) {
+          let finalTxt = txt.trim();
+          if (committedPrefix && finalTxt.startsWith(committedPrefix)) finalTxt = finalTxt.slice(committedPrefix.length).trim();
+          committedPrefix = ""; clearTimeout(silenceTimer);
+          if (finalTxt && finalTxt !== lastFinal) { lastFinal = finalTxt; commit(finalTxt); }
+        } else interim += txt;
+      }
+      interimText = interim.trim();
+      el.interim.textContent = interimText || "—";
+      // 端末によって確定が来ないことがあるため、1.8秒変化がなければ確定扱いにする
+      clearTimeout(silenceTimer);
+      if (interimText) silenceTimer = setTimeout(() => {
+        let t = interimText;
+        if (committedPrefix && t.startsWith(committedPrefix)) t = t.slice(committedPrefix.length).trim();
+        if (t) { commit(t); committedPrefix = interimText; }
+      }, 1800);
+    };
+    r.onerror = e => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        stop(); setStatus("error","マイク不可"); showPerm("denied");
+      } else if (e.error === "network") setStatus("error","通信エラー");
+      else if (e.error === "language-not-supported") { stop(); setStatus("error","言語非対応");
+        alertNote("この端末の音声認識は選択した言語に対応していません。"); }
+    };
+    r.onend = () => {
+      committedPrefix = ""; clearTimeout(silenceTimer);
+      if (running && !paused) setTimeout(() => { try { r.start(); } catch {} }, 250);
+    };
+    return r;
+  }
+  function alertNote(t){ el.support.hidden = false; el.support.textContent = t; }
+
+  // ---- マイク許可：ブラウザの許可ダイアログを確実に出し、状態を表示する
+  const framed = (() => { try { return window.self !== window.top; } catch { return true; } })();
+  if (framed) $("framed").hidden = false;
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const permState = $("permState"), permBtn = $("permBtn"), howto = $("howto");
+  function showPerm(s) {
+    const label = { granted:"許可済み", denied:"ブロック中", prompt:"未許可（開始時に確認されます）", unknown:"未確認" }[s] || "未確認";
+    permState.textContent = label; permState.dataset.s = s;
+    permBtn.hidden = s === "granted";
+    howto.hidden = s !== "denied";
+    if (s === "denied") howto.innerHTML = framed
+      ? "埋め込み表示ではマイクを許可できません。上のURLをブラウザで開いてください。"
+      : isIOS
+        ? "<b>iPhoneで常に許可する手順（目安）</b><ol><li>アドレスバー左のページメニュー →「Webサイトの設定」→ マイク →「許可」</li><li>または 設定アプリ → アプリ → Safari → マイク →「許可」</li><li>このページを再読み込み</li></ol>"
+        : "<b>Androidで常に許可する手順（目安）</b><ol><li>アドレスバー左のアイコン →「権限」→ マイク →「許可」</li><li>それでも不可なら 設定 → アプリ → Chrome → 権限 → マイク →「許可」</li><li>このページを再読み込み</li></ol>";
+  }
+  async function readPerm() {
+    try { const p = await navigator.permissions.query({ name: "microphone" });
+      showPerm(p.state); p.onchange = () => showPerm(p.state); return p.state; }
+    catch { showPerm("unknown"); return "unknown"; }
+  }
+  async function ensureMic() {
+    if (!navigator.mediaDevices?.getUserMedia) { showPerm(framed ? "denied" : "unknown"); return !framed; }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      s.getTracks().forEach(t => t.stop()); // 許可だけ取得し、マイクは音声認識側に渡す
+      showPerm("granted"); return true;
+    } catch (e) {
+      showPerm(e && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : "unknown");
+      if (e && e.name === "NotFoundError") alertNote("マイクが見つかりません。端末のマイク設定を確認してください。");
+      return false;
+    }
+  }
+  readPerm();
+  permBtn.onclick = () => ensureMic();
+
+  // ---- 読み上げテスト
+  $("testTts").onclick = async () => {
+    if (!("speechSynthesis" in window)) { alertNote("このブラウザは読み上げに対応していません。"); return; }
+    const unlock = new SpeechSynthesisUtterance(" "); unlock.volume = 0; speechSynthesis.speak(unlock);
+    let text = "テストです。イヤホンから聞こえていれば準備完了です。";
+    const tl = tCode(el.dst.value);
+    if (tl !== "ja") { try { text = await google(text, "ja", tl); } catch {
+      try { text = await mymemory(text, "ja", tl); } catch { text = "This is a test."; } } }
+    const u = new SpeechSynthesisUtterance(text); u.lang = el.dst.value; u.rate = Number(el.rate.value);
+    const v = voices.find(v => v.voiceURI === el.voice.value); if (v) u.voice = v;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  };
+
+  function pauseListening(){ if (!rec || paused) return; paused = true; try { rec.abort(); } catch {} }
+  function resumeListening(){ if (!rec || !paused) return; paused = false; try { rec.start(); } catch {} }
+
+  async function start() {
+    if (!SR) return;
+    // iOSは最初のタップ内で読み上げを一度動かしておく必要がある
+    if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
+    // 許可がまだなら、先にブラウザの許可ダイアログを出す
+    if (permState.dataset.s !== "granted") {
+      setStatus("idle"); el.mic.disabled = true; el.mic.textContent = "マイクの許可を確認中…";
+      const ok = await ensureMic();
+      el.mic.disabled = false; el.mic.textContent = "通訳を開始";
+      if (!ok) { setStatus("error", "マイク不可"); return; }
+    }
+    rec = build(); running = true; paused = false; lastFinal = "";
+    try { rec.start(); } catch {}
+    el.mic.textContent = "停止"; el.mic.classList.add("on"); setStatus("listen");
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  }
+  function stop() {
+    running = false; paused = false; clearTimeout(silenceTimer);
+    try { rec && rec.abort(); } catch {} rec = null;
+    speakQueue.length = 0; if ("speechSynthesis" in window) speechSynthesis.cancel(); speaking = false;
+    el.mic.textContent = "通訳を開始"; el.mic.classList.remove("on"); setStatus("idle");
+    el.interim.textContent = "—";
+    try { wakeLock && wakeLock.release(); } catch {} wakeLock = null;
+  }
+  const restartIfRunning = () => { if (running) { stop(); start(); } };
+
+  el.mic.onclick = () => running ? stop() : start();
+  el.clear.onclick = () => { el.log.querySelectorAll(".item").forEach(n => n.remove()); el.empty.hidden = false; };
+  el.swap.onclick = () => { const a = el.src.value; el.src.value = el.dst.value; el.dst.value = a; loadVoices(); persist(); restartIfRunning(); };
+  el.src.onchange = () => { persist(); restartIfRunning(); };
+  el.dst.onchange = () => { loadVoices(); persist(); };
+  for (const k of ["tts","duck","engine","voice"]) el[k].onchange = persist;
+  el.rate.oninput = el.size.oninput = () => { applyUI(); persist(); };
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible" && running) { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
+  });
+})();
+</script>
+</body>
+</html>
